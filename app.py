@@ -260,10 +260,7 @@ def login():
         
         return render_template('login.html', error="Login yoki parol noto'g'ri!")
     
-        return render_template('login.html')
-    except Exception as e:
-        print(f"Error in login route: {e}")
-        return f"Error: {str(e)}", 500
+    return render_template('login.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
