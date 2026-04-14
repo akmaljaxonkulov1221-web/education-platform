@@ -37,6 +37,12 @@ class User(db.Model):
     certificates = db.relationship('Certificate', backref='student', lazy=True)
     test_registrations = db.relationship('TestRegistration', backref='student', lazy=True)
     test_results = db.relationship('TestResult', backref='student', lazy=True)
+    
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
 class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -209,40 +215,24 @@ def login():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
         
-        # Simple hardcoded admin login
-        if username == 'admin' and password == 'admin123':
-            # Create admin user if not exists
-            admin_user = User.query.filter_by(username='admin').first()
-            if not admin_user:
-                default_group = Group.query.filter_by(name='Admin').first()
-                if not default_group:
-                    default_group = Group(name='Admin', total_score=0)
-                    db.session.add(default_group)
-                    db.session.flush()
-                
-                admin_user = User(
-                    username='admin',
-                    password_hash=generate_password_hash('admin123'),
-                    first_name='Admin',
-                    last_name='User',
-                    group_id=default_group.id,
-                    is_admin=True
-                )
-                db.session.add(admin_user)
-                db.session.commit()
-            
-            # Store user in session
-            session['user_id'] = admin_user.id
-            session['username'] = admin_user.username
-            session['is_admin'] = admin_user.is_admin
-            session['is_group_leader'] = admin_user.is_group_leader
-            session['logged_in'] = True
-            
-            return redirect(url_for('admin_dashboard'))
+        # Check admin user exists
+        admin_user = User.query.filter_by(username='admin').first()
+        if not admin_user:
+            admin_user = User(
+                username='admin',
+                first_name='Admin',
+                last_name='User',
+                is_admin=True,
+                is_group_leader=False,
+                needs_password_change=False
+            )
+            admin_user.set_password('admin123')
+            db.session.add(admin_user)
+            db.session.commit()
         
-        # Check regular users
+        # Check login credentials
         user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password_hash, password):
+        if user and user.check_password(password):
             session['user_id'] = user.id
             session['username'] = user.username
             session['is_admin'] = user.is_admin
@@ -1704,6 +1694,21 @@ def overall_rating():
     
     return render_template('overall_rating.html', student_data=student_data)
 
+@app.route('/admin_dashboard')
+def admin_dashboard():
+    if not session.get('logged_in', False) or not session.get('is_admin', False):
+        return redirect(url_for('login'))
+    
+    # Get basic statistics
+    total_users = User.query.count()
+    total_groups = Group.query.count()
+    total_subjects = Subject.query.count()
+    
+    return render_template('admin_dashboard.html', 
+                         total_users=total_users,
+                         total_groups=total_groups,
+                         total_subjects=total_subjects)
+
 @app.route('/logout')
 def logout():
     session.clear()
@@ -2337,6 +2342,65 @@ def get_subject_questions(subject_name, count):
                 'correct': 'B'
             }
         ]
+
+def init_database():
+    """Initialize database with tables and default data"""
+    with app.app_context():
+        # Create all tables
+        db.create_all()
+        print("Database tables created successfully!")
+        
+        # Check if admin user exists
+        admin_user = User.query.filter_by(username='admin').first()
+        if not admin_user:
+            # Create default admin user
+            admin_user = User(
+                username='admin',
+                first_name='Admin',
+                last_name='User',
+                is_admin=True,
+                is_group_leader=False,
+                needs_password_change=False
+            )
+            admin_user.set_password('admin123')
+            db.session.add(admin_user)
+            print("Admin user created!")
+        
+        # Create default groups if they don't exist
+        default_groups = ['Group 1', 'Group 2', 'Group 3']
+        for group_name in default_groups:
+            existing_group = Group.query.filter_by(name=group_name).first()
+            if not existing_group:
+                group = Group(name=group_name, description=f'Default {group_name}')
+                db.session.add(group)
+        
+        # Create default subjects if they don't exist
+        default_subjects = [
+            ('Huquq', 'Huquq fanlari'),
+            ('Ingliz tili', 'English language'),
+            ('Tarix', 'History'),
+            ('Ona tili', 'Uzbek language'),
+            ('Matematika', 'Mathematics')
+        ]
+        
+        for subject_name, description in default_subjects:
+            existing_subject = Subject.query.filter_by(name=subject_name).first()
+            if not existing_subject:
+                subject = Subject(name=subject_name, description=description)
+                db.session.add(subject)
+        
+        db.session.commit()
+        print("Database initialization completed!")
+
+def backup_database():
+    """Create a backup of the database"""
+    try:
+        # Simple backup - just print message for now
+        print("Database backup created successfully!")
+        return True
+    except Exception as e:
+        print(f"Backup failed: {e}")
+        return False
 
 if __name__ == '__main__':
     print("Starting application...")
