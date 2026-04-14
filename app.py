@@ -15,6 +15,11 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
+# Initialize database on startup
+with app.app_context():
+    db.create_all()
+    print("Database tables created!")
+
 # Database Models
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -239,23 +244,32 @@ def login():
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password_hash, password):
             session['user_id'] = user.id
-            session['username'] = user.username
-            session['is_admin'] = user.is_admin
-            session['is_group_leader'] = user.is_group_leader
-            session['logged_in'] = True
-            
-            if user.needs_password_change:
-                return redirect(url_for('change_password'))
-            elif user.is_admin:
                 return redirect(url_for('admin_dashboard'))
-            elif user.is_group_leader:
-                return redirect(url_for('group_leader_dashboard'))
-            else:
-                return redirect(url_for('student_dashboard'))
         
-        return render_template('login.html', error="Login yoki parol noto'g'ri!")
+            # Check regular users
+            user = User.query.filter_by(username=username).first()
+            if user and check_password_hash(user.password_hash, password):
+                session['user_id'] = user.id
+                session['username'] = user.username
+                session['is_admin'] = user.is_admin
+                session['is_group_leader'] = user.is_group_leader
+                session['logged_in'] = True
+                
+                if user.needs_password_change:
+                    return redirect(url_for('change_password'))
+                elif user.is_admin:
+                    return redirect(url_for('admin_dashboard'))
+                elif user.is_group_leader:
+                    return redirect(url_for('group_leader_dashboard'))
+                else:
+                    return redirect(url_for('student_dashboard'))
+        
+            return render_template('login.html', error="Login yoki parol noto'g'ri!")
     
-    return render_template('login.html')
+        return render_template('login.html')
+    except Exception as e:
+        print(f"Error in login route: {e}")
+        return f"Error: {str(e)}", 500
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
