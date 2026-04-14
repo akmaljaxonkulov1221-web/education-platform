@@ -1,0 +1,38 @@
+services:
+  # Type of service
+  - type: web
+    name: education-platform
+    env: python
+    plan: free
+    
+    # Build configuration
+    buildCommand: pip install -r requirements.txt
+    
+    # Start command
+    startCommand: gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 120 app:app
+    
+    # Environment variables
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        value: sqlite:///education_complete.db
+    
+    # Health check
+    healthCheckPath: /
+    
+    # Auto-deploy on push to main branch
+    autoDeploy: true
+    
+    # Directory to deploy from
+    rootDir: /
+    
+    # Static files
+    staticPublishPath: /static
+    
+    # Add-ons
+    addons:
+      - type: redis
+        plan: free
